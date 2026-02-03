@@ -1,0 +1,50 @@
+name: Deploy flownco (next standalone) to NCP server
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable corepack (yarn)
+        run: |
+          corepack enable
+          corepack prepare yarn@4.3.1 --activate
+          yarn -v
+
+      - name: Install & Build
+        run: |
+          yarn install --immutable
+          yarn build
+
+      - name: Create standalone artifact
+        run: |
+          rm -rf deploy
+          mkdir -p deploy
+          cp -R .next/standalone/* deploy/
+          mkdir -p deploy/.next
+          cp -R .next/static deploy/.next/
+          if [ -d public ]; then cp -R public deploy/public; fi
+          tar -czf flownco.tgz -C deploy .
+
+      - name: Upload & Deploy to server
+        env:
+          HOST: ${{ secrets.NCP_HOST }}
+          USER: ${{ secrets.NCP_USER }}
+          KEY:  ${{ secrets.NCP_SSH_KEY }}
+        run: |
+          echo "$KEY" > key.pem
+          chmod 600 key.pem
+
+          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "mkdir -p /srv/flownco/releases"
+          scp -i key.pem -o StrictHostKeyChecking=no flownco.tgz $USER@$HOST:/srv/flownco/releases/flownco.tgz
+          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "sudo /usr/local/bin/deploy-flownco-next.sh"
