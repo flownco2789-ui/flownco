@@ -1,63 +1,20 @@
-name: Deploy flownco (next standalone) to NCP server
-
-on:
-  push:
-    branches: ["main"]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: flownco   # ✅ 실제 Next 프로젝트 폴더
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # (디버그용) 구조 확인 - 한번만 돌리고 나중에 지워도 됨
-      - name: Show repo structure
-        run: |
-          pwd
-          ls -al
-          ls -al ..
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Enable corepack (yarn)
-        run: |
-          corepack enable
-          corepack prepare yarn@4.3.1 --activate
-          yarn -v
-
-      - name: Install & Build
-        run: |
-          yarn install --immutable
-          yarn build
-          test -d .next/standalone
-
-      - name: Create standalone artifact
-        run: |
-          rm -rf deploy
-          mkdir -p deploy
-          cp -R .next/standalone/* deploy/
-          mkdir -p deploy/.next
-          cp -R .next/static deploy/.next/
-          if [ -d public ]; then cp -R public deploy/public; fi
-          tar -czf flownco.tgz -C deploy .
-
       - name: Upload & Deploy to server
         env:
-          HOST: ${{ secrets.NCP_HOST }}
-          USER: ${{ secrets.NCP_USER }}
-          KEY:  ${{ secrets.NCP_SSH_KEY }}
+          SSH_HOST: ${{ secrets.NCP_HOST }}
+          SSH_USER: ${{ secrets.NCP_USER }}
+          SSH_KEY:  ${{ secrets.NCP_SSH_KEY }}
         run: |
-          echo "$KEY" > key.pem
+          set -euo pipefail
+
+          # ✅ 비어있으면 여기서 바로 에러내고 종료
+          [ -n "${SSH_HOST:-}" ] || (echo "NCP_HOST is empty" && exit 1)
+          [ -n "${SSH_USER:-}" ] || (echo "NCP_USER is empty" && exit 1)
+          [ -n "${SSH_KEY:-}" ]  || (echo "NCP_SSH_KEY is empty" && exit 1)
+
+          # ✅ 키 파일 생성 (printf가 더 안전)
+          printf '%s' "$SSH_KEY" > key.pem
           chmod 600 key.pem
 
-          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "mkdir -p /srv/flownco/releases"
-          scp -i key.pem -o StrictHostKeyChecking=no flownco.tgz $USER@$HOST:/srv/flownco/releases/flownco.tgz
-          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "sudo /usr/local/bin/deploy-flownco-next.sh"
+          ssh -i key.pem -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} "mkdir -p /srv/flownco/releases"
+          scp -i key.pem -o StrictHostKeyChecking=no flownco.tgz ${SSH_USER}@${SSH_HOST}:/srv/flownco/releases/flownco.tgz
+          ssh -i key.pem -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} "sudo /usr/local/bin/deploy-flownco-next.sh"
