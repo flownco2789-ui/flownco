@@ -48,20 +48,18 @@ jobs:
           cp -R .next/static deploy/.next/
           if [ -d public ]; then cp -R public deploy/public; fi
           tar -czf flownco.tgz -C deploy .
+
       - name: Upload & Deploy to server
         env:
-          SSH_HOST: ${{ secrets.NCP_HOST }}
-          SSH_USER: ${{ secrets.NCP_USER }}
+          SSH_HOST: ${{ vars.NCP_HOST }}
+          SSH_USER: ${{ vars.NCP_USER }}
           SSH_KEY:  ${{ secrets.NCP_SSH_KEY }}
         run: |
           set -euo pipefail
-
-          # ✅ 비어있으면 여기서 바로 에러내고 종료
           [ -n "${SSH_HOST:-}" ] || (echo "NCP_HOST is empty" && exit 1)
           [ -n "${SSH_USER:-}" ] || (echo "NCP_USER is empty" && exit 1)
-          [ -n "${SSH_KEY:-}" ]  || (echo "NCP_SSH_KEY is empty" && exit 1)
+          [ -n "${SSH_KEY:-}"  ] || (echo "NCP_SSH_KEY is empty" && exit 1)
 
-          # ✅ 키 파일 생성 (printf가 더 안전)
           printf '%s' "$SSH_KEY" > key.pem
           chmod 600 key.pem
 
