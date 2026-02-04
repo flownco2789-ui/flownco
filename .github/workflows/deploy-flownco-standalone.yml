@@ -7,8 +7,20 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: flownco   # ✅ 실제 Next 프로젝트 폴더
+
     steps:
       - uses: actions/checkout@v4
+
+      # (디버그용) 구조 확인 - 한번만 돌리고 나중에 지워도 됨
+      - name: Show repo structure
+        run: |
+          pwd
+          ls -al
+          ls -al ..
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -25,6 +37,7 @@ jobs:
         run: |
           yarn install --immutable
           yarn build
+          test -d .next/standalone
 
       - name: Create standalone artifact
         run: |
